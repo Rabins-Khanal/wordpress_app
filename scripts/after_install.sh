@@ -7,3 +7,4 @@ sudo chown -R www-data:www-data /var/www/html || sudo chown -R apache:apache /va
 # Example: pull DB creds from SSM (requires instance role permissions)
 # DB_HOST=$(aws ssm get-parameter --name "/prod/rds/endpoint" --query Parameter.Value --output text --region ap-south-1)
 # Use simple approach: assume wp-config.php is included or templated elsewhere
+#
