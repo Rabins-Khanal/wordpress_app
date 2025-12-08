@@ -1,0 +1,58 @@
+name: CI/CD - CodeDeploy
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ap-south-1
+      S3_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}   # set in repo secrets
+      CODEDEPLOY_APP_NAME: ${{ secrets.CODEDEPLOY_APP_NAME }}  # set in repo secrets
+      CODEDEPLOY_DG_NAME: ${{ secrets.CODEDEPLOY_DG_NAME }}    # set in repo secrets
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up AWS creds
+        uses: aws-actions/configure-aws-credentials@v3
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Prepare artifact name
+        id: vars
+        run: |
+          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
+          ARTIFACT_KEY="wordpress_app/${GITHUB_RUN_ID}-${TIMESTAMP}.zip"
+          echo "artifact_key=${ARTIFACT_KEY}" >> $GITHUB_OUTPUT
+
+      - name: Zip app
+        run: |
+          zip -r app-${{ github.run_id }}.zip appspec.yml scripts/ wp-content/ index.php || true
+          # If your repo root contains the full WP tree, adjust accordingly
+          ls -la
+
+      - name: Upload artifact to S3
+        run: |
+          aws s3 cp app-${{ github.run_id }}.zip s3://${{ env.S3_BUCKET }}/${{ steps.vars.outputs.artifact_key }}
+        # exit will naturally wait until upload completes
+
+      - name: Create CodeDeploy Deployment
+        id: create_deploy
+        run: |
+          aws deploy create-deployment \
+            --application-name "${CODEDEPLOY_APP_NAME}" \
+            --deployment-group-name "${CODEDEPLOY_DG_NAME}" \
+            --s3-location bucket=${S3_BUCKET},key=${{ steps.vars.outputs.artifact_key }},bundleType=zip \
+            --region ${AWS_REGION} \
+            --description "GitHub Actions deploy $GITHUB_SHA"
+          echo "Deployment triggered"
