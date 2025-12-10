@@ -1,60 +1,40 @@
-name: CI/CD - CodeDeploy
+name: Deploy App
 
 on:
   push:
     branches:
       - main
 
-permissions:
-  contents: read
-
 jobs:
-  build-and-deploy:
+  deploy:
     runs-on: ubuntu-latest
-    env:
-      AWS_REGION: ap-south-1
-      S3_BUCKET: ${{ secrets.ARTIFACT_BUCKET }}   # set in repo secrets
-      CODEDEPLOY_APP_NAME: ${{ secrets.CODEDEPLOY_APP_NAME }}  # set in repo secrets
-      CODEDEPLOY_DG_NAME: ${{ secrets.CODEDEPLOY_DG_NAME }}    # set in repo secrets
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      # 1️⃣ Checkout repo
+      - uses: actions/checkout@v3
 
-      - name: Set AWS credentials
-        uses: aws-actions/configure-aws-credentials@v2
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
-          aws-region: ap-south-1
-
-
-      - name: Prepare artifact name
-        id: vars
-        run: |
-          TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)
-          ARTIFACT_KEY="wordpress_app/${GITHUB_RUN_ID}-${TIMESTAMP}.zip"
-          echo "artifact_key=${ARTIFACT_KEY}" >> $GITHUB_OUTPUT
-
+      # 2️⃣ Zip the app bundle (appspec.yml + html folder)
       - name: Zip app
-        run: |
-          zip -r app-${{ github.run_id }}.zip appspec.yml scripts/ wp-content/ index.php || true
-          # If your repo root contains the full WP tree, adjust accordingly
-          ls -la
+        run: zip -r my-app.zip appspec.yml html/
 
-      - name: Upload artifact to S3
-        run: |
-          aws s3 cp app-${{ github.run_id }}.zip s3://${{ env.S3_BUCKET }}/${{ steps.vars.outputs.artifact_key }}
-        # exit will naturally wait until upload completes
+      # 3️⃣ Upload zip to S3 (CodeDeploy artifact bucket)
+      - name: Upload to S3
+        run: aws s3 cp my-app.zip s3://${{ secrets.ARTIFACT_BUCKET }}/my-app.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_DEFAULT_REGION: ap-south-1
 
-      - name: Create CodeDeploy Deployment
-        id: create_deploy
+      # 4️⃣ Trigger CodeDeploy Blue/Green deployment
+      - name: Trigger CodeDeploy
         run: |
           aws deploy create-deployment \
-            --application-name "${CODEDEPLOY_APP_NAME}" \
-            --deployment-group-name "${CODEDEPLOY_DG_NAME}" \
-            --s3-location bucket=${S3_BUCKET},key=${{ steps.vars.outputs.artifact_key }},bundleType=zip \
-            --region ${AWS_REGION} \
-            --description "GitHub Actions deploy $GITHUB_SHA"
-          echo "Deployment triggered"
+            --application-name ${{ secrets.CODEDEPLOY_APP_NAME }} \
+            --deployment-group-name ${{ secrets.CODEDEPLOY_DG_NAME }} \
+            --s3-location bucket=${{ secrets.ARTIFACT_BUCKET}},bundleType=zip,key=my-app.zip
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          AWS_SESSION_TOKEN: ${{ secrets.AWS_SESSION_TOKEN }}
+          AWS_DEFAULT_REGION: ap-south-1
