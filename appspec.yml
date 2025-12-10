@@ -5,14 +5,8 @@ files:
   - source: html/
     destination: /var/www/html/
 
-permissions:
-  - object: /var/www/html
-    type: directory
-    mode: 755
-    recurse: true
-
 hooks:
   AfterInstall:
-    - location: scripts/dummy.sh
+    - location: scripts/restart_apache.sh
       timeout: 300
       runas: root
