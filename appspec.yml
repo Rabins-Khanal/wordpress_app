@@ -10,3 +10,9 @@ permissions:
     type: directory
     mode: 755
     recurse: true
+
+hooks:
+  AfterInstall:
+    - location: scripts/dummy.sh
+      timeout: 300
+      runas: root
