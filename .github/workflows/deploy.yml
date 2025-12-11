@@ -17,7 +17,7 @@ jobs:
       # 2️⃣ Zip the application bundle
       # Includes appspec.yml + html/ directory
       - name: Zip application
-        run: zip -r my-app.zip appspec.yml html/
+        run: zip -r my-app.zip appspec.yml html/ scripts/
 
       # 3️⃣ Upload ZIP to S3 (artifact bucket used by CodeDeploy)
       - name: Upload artifact to S3
